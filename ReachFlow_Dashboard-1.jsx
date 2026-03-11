@@ -1,0 +1,731 @@
+import { useState, useEffect, useRef } from "react";
+
+const ACCENT = "#00E5C7";
+const ACCENT2 = "#FF6B35";
+const BG = "#080C14";
+const CARD = "#0D1421";
+const CARD2 = "#111927";
+const BORDER = "#1C2A3A";
+const TEXT = "#E8F0FE";
+const MUTED = "#5A7A9A";
+
+const style = document.createElement("style");
+style.textContent = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: ${BG}; color: ${TEXT}; font-family: 'Inter', sans-serif; }
+  ::-webkit-scrollbar { width: 4px; } 
+  ::-webkit-scrollbar-track { background: ${BG}; }
+  ::-webkit-scrollbar-thumb { background: ${BORDER}; border-radius: 2px; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes slideIn { from{transform:translateY(12px);opacity:0} to{transform:translateY(0);opacity:1} }
+  @keyframes glow { 0%,100%{box-shadow:0 0 8px rgba(0,229,199,0.2)} 50%{box-shadow:0 0 20px rgba(0,229,199,0.5)} }
+  @keyframes countUp { from{opacity:0;transform:scale(0.8)} to{opacity:1;transform:scale(1)} }
+  @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+  .tab-btn { transition: all 0.2s; }
+  .tab-btn:hover { background: rgba(0,229,199,0.08) !important; }
+  .tab-btn.active { background: rgba(0,229,199,0.12) !important; color: ${ACCENT} !important; border-left: 2px solid ${ACCENT} !important; }
+  .card { animation: slideIn 0.3s ease forwards; }
+  .stat-card:hover { transform: translateY(-2px); transition: transform 0.2s; }
+  .btn-primary { background: linear-gradient(135deg, ${ACCENT}, #00B89E); color: #080C14; border: none; cursor: pointer; font-weight: 600; transition: all 0.2s; font-family: 'Syne', sans-serif; }
+  .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: ${MUTED}; border: 1px solid ${BORDER}; cursor: pointer; transition: all 0.2s; }
+  .btn-ghost:hover { border-color: ${ACCENT}; color: ${ACCENT}; }
+  .input-field { background: ${CARD2}; border: 1px solid ${BORDER}; color: ${TEXT}; font-family: 'Inter', sans-serif; transition: border 0.2s; outline: none; }
+  .input-field:focus { border-color: ${ACCENT}; }
+  .lead-row:hover { background: rgba(255,255,255,0.02); }
+  .progress-bar { background: linear-gradient(90deg, ${ACCENT}, #00B89E); border-radius: 2px; transition: width 0.6s ease; }
+  .tag { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .badge-positive { background: rgba(0,229,199,0.12); color: ${ACCENT}; }
+  .badge-pending { background: rgba(255,107,53,0.12); color: ${ACCENT2}; }
+  .badge-neutral { background: rgba(90,122,154,0.15); color: ${MUTED}; }
+  .badge-negative { background: rgba(255,80,80,0.1); color: #FF5050; }
+  .glow-dot { animation: glow 2s infinite; }
+  .template-card:hover { border-color: ${ACCENT} !important; cursor: pointer; }
+`;
+document.head.appendChild(style);
+
+const NAV = [
+  { id: "dashboard", label: "Dashboard", icon: "⬡" },
+  { id: "leads", label: "Leads", icon: "◈" },
+  { id: "campaigns", label: "Campaigns", icon: "◎" },
+  { id: "templates", label: "Templates", icon: "▤" },
+  { id: "inbox", label: "Inbox", icon: "◻" },
+  { id: "analytics", label: "Analytics", icon: "◇" },
+  { id: "settings", label: "Settings", icon: "◉" },
+];
+
+const STATS = [
+  { label: "Emails Sent", value: "2,847", change: "+12%", up: true },
+  { label: "Open Rate", value: "38.4%", change: "+4.2%", up: true },
+  { label: "Reply Rate", value: "14.7%", change: "+1.8%", up: true },
+  { label: "Meetings Booked", value: "23", change: "+5", up: true },
+];
+
+const LEADS_DATA = [
+  { name: "Sarah Chen", role: "Head of Talent", company: "Blackrock", email: "s.chen@blackrock.com", status: "Replied", score: 92, stage: "2nd Follow-up" },
+  { name: "Marcus Williams", role: "VP Engineering", company: "Stripe", email: "m.williams@stripe.com", status: "Opened", score: 87, stage: "Follow-up 1" },
+  { name: "Priya Patel", role: "Director, Risk", company: "Goldman Sachs", email: "p.patel@gs.com", status: "Sent", score: 79, stage: "Initial" },
+  { name: "James Okafor", role: "Recruiting Lead", company: "McKinsey", email: "j.okafor@mckinsey.com", status: "Replied", score: 95, stage: "Meeting Set" },
+  { name: "Elena Vasquez", role: "Founder & CEO", company: "Fincara AI", email: "elena@fincara.ai", status: "Opened", score: 84, stage: "Follow-up 1" },
+  { name: "David Park", role: "Partner", company: "Deloitte", email: "d.park@deloitte.com", status: "Pending", score: 71, stage: "Initial" },
+  { name: "Amara Osei", role: "Compliance Dir.", company: "JP Morgan", email: "a.osei@jpmorgan.com", status: "Sent", score: 76, stage: "Initial" },
+  { name: "Tom Richards", role: "Head of Audit", company: "EY", email: "t.richards@ey.com", status: "Bounced", score: 45, stage: "—" },
+];
+
+const TEMPLATES = [
+  { name: "Job Opportunity Outreach", type: "Primary", rate: "18.2%", uses: 312 },
+  { name: "Referral Request", type: "Network", rate: "22.1%", uses: 198 },
+  { name: "Informational Chat", type: "Soft Ask", rate: "16.7%", uses: 241 },
+  { name: "Alumni Connection", type: "Warm", rate: "24.3%", uses: 87 },
+  { name: "Follow-up Day 3", type: "Follow-up", rate: "11.4%", uses: 430 },
+  { name: "Follow-up Day 7", type: "Follow-up", rate: "8.9%", uses: 287 },
+  { name: "Industrial Training", type: "Entry", rate: "14.1%", uses: 63 },
+  { name: "Thank You Email", type: "Post-Reply", rate: "31.0%", uses: 44 },
+];
+
+const INBOX = [
+  { from: "James Okafor", company: "McKinsey", subject: "Re: Quick connection — Consulting Analyst roles", type: "Positive", time: "2h ago", preview: "Thanks for reaching out! I'd love to set up a quick call..." },
+  { from: "Sarah Chen", company: "Blackrock", subject: "Re: Finance talent at Blackrock", type: "Positive", time: "5h ago", preview: "Great timing — we have a few openings that match your profile..." },
+  { from: "Auto Reply", company: "Deloitte", subject: "Out of Office: David Park", type: "OOO", time: "1d ago", preview: "I'm currently out of office until March 20th..." },
+  { from: "Noreply", company: "JP Morgan", subject: "Delivery failure notification", type: "Bounce", time: "2d ago", preview: "This message could not be delivered to..." },
+  { from: "Elena Vasquez", company: "Fincara AI", subject: "Re: Fintech AI startup opportunity", type: "Neutral", time: "3d ago", preview: "Thanks for reaching out. We're not actively hiring right now but..." },
+];
+
+const AI_EMAIL_SAMPLE = `Subject: Your recent post on risk frameworks resonated — quick question
+
+Hi Sarah,
+
+Your LinkedIn post on AI-driven compliance frameworks last week was genuinely insightful — specifically your point about model governance in asset management.
+
+I'm a finance grad with two years in audit (PwC) pivoting toward risk advisory. I'd love to hear how Blackrock is thinking about these challenges from the inside.
+
+Would a 15-min call make sense? Happy to work around your schedule.
+
+[Resume] | [LinkedIn]
+
+Best,
+Alex`;
+
+function StatCard({ label, value, change, up }) {
+  return (
+    <div className="stat-card card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "20px 24px", flex: 1, minWidth: 160 }}>
+      <div style={{ color: MUTED, fontSize: 11, fontWeight: 500, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 10, fontFamily: "'JetBrains Mono', monospace" }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 800, fontFamily: "'Syne', sans-serif", color: TEXT, lineHeight: 1 }}>{value}</div>
+      <div style={{ marginTop: 8, fontSize: 12, color: up ? ACCENT : "#FF5050", fontFamily: "'JetBrains Mono', monospace" }}>
+        {up ? "↑" : "↓"} {change} this week
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const cls = status === "Replied" ? "badge-positive" : status === "Opened" ? "badge-pending" : status === "Bounced" ? "badge-negative" : "badge-neutral";
+  return <span className={`tag ${cls}`} style={{ padding: "3px 10px", borderRadius: 20, fontWeight: 500 }}>{status}</span>;
+}
+
+function ScoreBar({ score }) {
+  const color = score >= 85 ? ACCENT : score >= 65 ? ACCENT2 : "#FF5050";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ width: 56, height: 4, background: BORDER, borderRadius: 2 }}>
+        <div className="progress-bar" style={{ width: `${score}%`, background: color, height: "100%" }} />
+      </div>
+      <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color }}>{score}</span>
+    </div>
+  );
+}
+
+function MiniChart({ data, color = ACCENT }) {
+  const max = Math.max(...data);
+  return (
+    <svg width="100%" height="40" viewBox={`0 0 ${data.length * 16} 40`} preserveAspectRatio="none">
+      <polyline
+        points={data.map((v, i) => `${i * 16},${40 - (v / max) * 34}`).join(" ")}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.8"
+      />
+      <polyline
+        points={`0,40 ${data.map((v, i) => `${i * 16},${40 - (v / max) * 34}`).join(" ")} ${(data.length - 1) * 16},40`}
+        fill={`${color}15`}
+        stroke="none"
+      />
+    </svg>
+  );
+}
+
+const CHART_DATA = {
+  sent: [12, 18, 14, 22, 19, 31, 28, 35, 40, 38, 42, 47],
+  opens: [4, 7, 6, 9, 8, 14, 11, 15, 17, 16, 18, 20],
+  replies: [1, 2, 1, 3, 2, 5, 4, 6, 7, 6, 7, 8],
+};
+
+export default function ReachFlow() {
+  const [tab, setTab] = useState("dashboard");
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [generatedEmail, setGeneratedEmail] = useState("");
+  const [leadFilter, setLeadFilter] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showAICompose, setShowAICompose] = useState(false);
+  const [composeForm, setComposeForm] = useState({ name: "", role: "", company: "", hook: "" });
+  const [activeTemplate, setActiveTemplate] = useState(null);
+  const [campaignStatus, setCampaignStatus] = useState("running");
+
+  const filteredLeads = LEADS_DATA.filter(l => {
+    const matchSearch = l.name.toLowerCase().includes(searchQuery.toLowerCase()) || l.company.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchFilter = leadFilter === "All" || l.status === leadFilter;
+    return matchSearch && matchFilter;
+  });
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGeneratedEmail("");
+    await new Promise(r => setTimeout(r, 1400));
+    const name = composeForm.name || "Sarah";
+    const role = composeForm.role || "Head of Talent";
+    const company = composeForm.company || "Blackrock";
+    const hook = composeForm.hook || "your recent post on AI in compliance";
+    setGeneratedEmail(`Subject: ${hook} caught my eye — quick question\n\nHi ${name.split(" ")[0]},\n\n${hook.charAt(0).toUpperCase() + hook.slice(1)} was genuinely compelling — especially your framing around regulatory change at ${company}.\n\nI'm a finance grad with two years in audit & risk advisory, currently exploring roles in ${role.includes("Risk") || role.includes("Compliance") ? "risk and compliance" : "financial services"}. I'd love to hear your perspective on how ${company} is approaching things — even just 15 minutes would be incredibly valuable.\n\nHappy to work around your schedule.\n\n[Resume] | [LinkedIn]\n\nBest,\nAlex`);
+    setGenerating(false);
+  };
+
+  return (
+    <div style={{ display: "flex", height: "100vh", background: BG, overflow: "hidden" }}>
+      {/* Sidebar */}
+      <div style={{ width: 220, background: CARD, borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        {/* Logo */}
+        <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 20, color: TEXT, letterSpacing: "-0.5px" }}>
+            Reach<span style={{ color: ACCENT }}>Flow</span>
+          </div>
+          <div style={{ fontSize: 10, color: MUTED, marginTop: 3, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.1em" }}>AI OUTREACH ENGINE</div>
+        </div>
+
+        {/* Live status */}
+        <div style={{ margin: "12px 12px 0", background: `rgba(0,229,199,0.06)`, border: `1px solid rgba(0,229,199,0.15)`, borderRadius: 8, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="glow-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: ACCENT, flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 11, color: ACCENT, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>LIVE</div>
+            <div style={{ fontSize: 10, color: MUTED }}>3 campaigns active</div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: "12px 0", overflowY: "auto" }}>
+          {NAV.map(n => (
+            <button key={n.id} className={`tab-btn ${tab === n.id ? "active" : ""}`} onClick={() => setTab(n.id)}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 20px", background: "transparent", border: "none", borderLeft: "2px solid transparent", color: tab === n.id ? ACCENT : MUTED, fontSize: 13, textAlign: "left", cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+              <span style={{ fontSize: 16, opacity: 0.8 }}>{n.icon}</span>
+              {n.label}
+              {n.id === "inbox" && <span style={{ marginLeft: "auto", background: ACCENT2, color: "white", borderRadius: 10, fontSize: 10, padding: "1px 7px", fontWeight: 600 }}>3</span>}
+            </button>
+          ))}
+        </nav>
+
+        {/* User */}
+        <div style={{ padding: "12px 16px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${ACCENT}, #00B89E)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: BG, fontFamily: "'Syne', sans-serif" }}>A</div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: TEXT }}>Alex Morgan</div>
+            <div style={{ fontSize: 10, color: MUTED }}>Finance · Audit</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Topbar */}
+        <div style={{ height: 56, background: CARD, borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", padding: "0 24px", gap: 16, flexShrink: 0 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 16, color: TEXT }}>{NAV.find(n => n.id === tab)?.label}</div>
+          </div>
+          <input className="input-field" placeholder="Search leads, companies..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+            style={{ width: 220, padding: "7px 14px", borderRadius: 8, fontSize: 13 }} />
+          <button className="btn-primary" onClick={() => { setTab("templates"); setShowAICompose(true); }}
+            style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+            ✦ Generate Email
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+
+          {/* ─── DASHBOARD ─── */}
+          {tab === "dashboard" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Stats */}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {STATS.map(s => <StatCard key={s.label} {...s} />)}
+              </div>
+
+              {/* Charts row */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}>
+                {/* Activity chart */}
+                <div className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15 }}>Outreach Activity</div>
+                    <div style={{ display: "flex", gap: 16, fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
+                      {[["Sent", ACCENT], ["Opened", ACCENT2], ["Replied", "#7C8CFF"]].map(([l, c]) => (
+                        <span key={l} style={{ color: c, display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ width: 8, height: 2, background: c, display: "inline-block", borderRadius: 1 }} />{l}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ position: "relative", height: 80 }}>
+                    <div style={{ position: "absolute", inset: 0 }}><MiniChart data={CHART_DATA.sent} color={ACCENT} /></div>
+                    <div style={{ position: "absolute", inset: 0, opacity: 0.7 }}><MiniChart data={CHART_DATA.opens} color={ACCENT2} /></div>
+                    <div style={{ position: "absolute", inset: 0, opacity: 0.6 }}><MiniChart data={CHART_DATA.replies} color="#7C8CFF" /></div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+                    {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map(m => (
+                      <span key={m} style={{ fontSize: 9, color: MUTED, fontFamily: "'JetBrains Mono', monospace" }}>{m}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pipeline */}
+                <div className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                  <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Pipeline Funnel</div>
+                  {[
+                    ["Leads Imported", 847, 847],
+                    ["Emails Sent", 612, 847],
+                    ["Opened", 235, 847],
+                    ["Replied", 90, 847],
+                    ["Meetings Booked", 23, 847],
+                  ].map(([label, val, total]) => (
+                    <div key={label} style={{ marginBottom: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 12 }}>
+                        <span style={{ color: MUTED }}>{label}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", color: TEXT, fontSize: 11 }}>{val.toLocaleString()}</span>
+                      </div>
+                      <div style={{ height: 5, background: BORDER, borderRadius: 3 }}>
+                        <div style={{ width: `${(val / total) * 100}%`, height: "100%", background: `linear-gradient(90deg, ${ACCENT}, #00B89E)`, borderRadius: 3, transition: "width 0.8s ease" }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent activity */}
+              <div className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 16 }}>Recent Leads Activity</div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                      {["Contact", "Company", "Status", "AI Score", "Stage"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "6px 12px", fontSize: 10, color: MUTED, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em", fontWeight: 500 }}>{h.toUpperCase()}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {LEADS_DATA.slice(0, 5).map((l, i) => (
+                      <tr key={i} className="lead-row" style={{ borderBottom: `1px solid ${BORDER}22` }}>
+                        <td style={{ padding: "10px 12px" }}>
+                          <div style={{ fontWeight: 500, fontSize: 13 }}>{l.name}</div>
+                          <div style={{ fontSize: 11, color: MUTED }}>{l.role}</div>
+                        </td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: MUTED }}>{l.company}</td>
+                        <td style={{ padding: "10px 12px" }}><StatusBadge status={l.status} /></td>
+                        <td style={{ padding: "10px 12px" }}><ScoreBar score={l.score} /></td>
+                        <td style={{ padding: "10px 12px", fontSize: 11, color: MUTED, fontFamily: "'JetBrains Mono', monospace" }}>{l.stage}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Deliverability */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+                {[
+                  { label: "Domain Health", value: "Excellent", score: 94, icon: "◈" },
+                  { label: "Spam Score", value: "Low Risk", score: 12, icon: "◎", invert: true },
+                  { label: "Daily Limit", value: "32 / 40", score: 80, icon: "◇" },
+                ].map(m => (
+                  <div key={m.label} className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                      <span style={{ fontSize: 11, color: MUTED, fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.08em" }}>{m.label}</span>
+                      <span style={{ color: ACCENT, fontSize: 16 }}>{m.icon}</span>
+                    </div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 18, color: TEXT, marginBottom: 10 }}>{m.value}</div>
+                    <div style={{ height: 4, background: BORDER, borderRadius: 2 }}>
+                      <div style={{ width: `${m.score}%`, height: "100%", background: m.invert ? (m.score < 30 ? ACCENT : "#FF5050") : (m.score > 70 ? ACCENT : ACCENT2), borderRadius: 2, transition: "width 1s" }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── LEADS ─── */}
+          {tab === "leads" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                {["All", "Replied", "Opened", "Sent", "Pending"].map(f => (
+                  <button key={f} onClick={() => setLeadFilter(f)} className="btn-ghost"
+                    style={{ padding: "6px 16px", borderRadius: 20, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", borderColor: leadFilter === f ? ACCENT : BORDER, color: leadFilter === f ? ACCENT : MUTED }}>
+                    {f}
+                  </button>
+                ))}
+                <div style={{ flex: 1 }} />
+                <button className="btn-primary" style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13 }}>+ Import Leads</button>
+                <button className="btn-ghost" style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13 }}>⬡ Enrich Data</button>
+              </div>
+
+              <div className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: CARD2, borderBottom: `1px solid ${BORDER}` }}>
+                      {["Contact", "Company / Role", "Email", "AI Score", "Status", "Stage", "Actions"].map(h => (
+                        <th key={h} style={{ textAlign: "left", padding: "10px 16px", fontSize: 10, color: MUTED, fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.08em", fontWeight: 500 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeads.map((l, i) => (
+                      <tr key={i} className="lead-row" style={{ borderBottom: `1px solid ${BORDER}22`, cursor: "pointer" }} onClick={() => setSelectedLead(l)}>
+                        <td style={{ padding: "12px 16px" }}>
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>{l.name}</div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <div style={{ fontSize: 13, color: TEXT }}>{l.company}</div>
+                          <div style={{ fontSize: 11, color: MUTED }}>{l.role}</div>
+                        </td>
+                        <td style={{ padding: "12px 16px", fontSize: 11, color: MUTED, fontFamily: "'JetBrains Mono', monospace" }}>{l.email}</td>
+                        <td style={{ padding: "12px 16px" }}><ScoreBar score={l.score} /></td>
+                        <td style={{ padding: "12px 16px" }}><StatusBadge status={l.status} /></td>
+                        <td style={{ padding: "12px 16px", fontSize: 11, color: MUTED, fontFamily: "'JetBrains Mono', monospace" }}>{l.stage}</td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button className="btn-ghost" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11 }}>✦ AI Email</button>
+                            <button className="btn-ghost" style={{ padding: "4px 10px", borderRadius: 6, fontSize: 11 }}>→</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Lead Detail Panel */}
+              {selectedLead && (
+                <div className="card" style={{ background: CARD, border: `1px solid ${ACCENT}33`, borderRadius: 12, padding: 20, animation: "slideIn 0.2s ease" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 18 }}>{selectedLead.name}</div>
+                      <div style={{ color: MUTED, fontSize: 13, marginTop: 2 }}>{selectedLead.role} · {selectedLead.company}</div>
+                    </div>
+                    <button onClick={() => setSelectedLead(null)} className="btn-ghost" style={{ padding: "4px 12px", borderRadius: 6, fontSize: 12 }}>✕ Close</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+                    {[["Email", selectedLead.email], ["Status", selectedLead.status], ["Stage", selectedLead.stage]].map(([k, v]) => (
+                      <div key={k} style={{ background: CARD2, borderRadius: 8, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 10, color: MUTED, fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>{k.toUpperCase()}</div>
+                        <div style={{ fontSize: 13, color: TEXT }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="btn-primary" style={{ padding: "9px 20px", borderRadius: 8, fontSize: 13 }}>✦ Generate Personalized Email</button>
+                    <button className="btn-ghost" style={{ padding: "9px 20px", borderRadius: 8, fontSize: 13 }}>Schedule Follow-up</button>
+                    <button className="btn-ghost" style={{ padding: "9px 20px", borderRadius: 8, fontSize: 13 }}>View History</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── CAMPAIGNS ─── */}
+          {tab === "campaigns" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", gap: 12 }}>
+                <button className="btn-primary" style={{ padding: "9px 20px", borderRadius: 8, fontSize: 13 }}>+ New Campaign</button>
+                <button className="btn-ghost" style={{ padding: "9px 20px", borderRadius: 8, fontSize: 13 }}>Import CSV</button>
+              </div>
+
+              {[
+                { name: "Finance & Audit Outreach", leads: 142, sent: 98, opens: 41, replies: 14, status: "running" },
+                { name: "FinTech Startup Founders", leads: 67, sent: 52, opens: 19, replies: 8, status: "running" },
+                { name: "Big4 Consulting Recruiters", leads: 89, sent: 64, opens: 28, replies: 9, status: "paused" },
+              ].map((c, i) => (
+                <div key={i} className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 16 }}>{c.name}</div>
+                      <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{c.leads} leads · Gmail warmup active</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <span className={`tag ${c.status === "running" ? "badge-positive" : "badge-neutral"}`} style={{ padding: "4px 12px", borderRadius: 20 }}>
+                        {c.status === "running" ? "● Running" : "⏸ Paused"}
+                      </span>
+                      <button className="btn-ghost" style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12 }}>
+                        {c.status === "running" ? "Pause" : "Resume"}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+                    {[["Leads", c.leads], ["Sent", c.sent], ["Opened", c.opens], ["Replied", c.replies], ["Rate", `${((c.replies / c.sent) * 100).toFixed(1)}%`]].map(([k, v]) => (
+                      <div key={k} style={{ background: CARD2, borderRadius: 8, padding: "10px 14px", textAlign: "center" }}>
+                        <div style={{ fontSize: 10, color: MUTED, fontFamily: "'JetBrains Mono', monospace", marginBottom: 6 }}>{k}</div>
+                        <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 20, color: k === "Rate" ? ACCENT : TEXT }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 11, color: MUTED, marginBottom: 6, fontFamily: "'JetBrains Mono', monospace" }}>FOLLOW-UP SEQUENCE</div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {["Initial Email", "Day 3 Follow-up", "Day 7 Follow-up", "Day 14 Final"].map((s, si) => (
+                        <div key={si} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ background: si === 0 ? ACCENT : si <= 1 ? `${ACCENT}60` : BORDER, color: si === 0 ? BG : si <= 1 ? ACCENT : MUTED, padding: "5px 14px", borderRadius: 20, fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>{s}</div>
+                          {si < 3 && <div style={{ width: 20, height: 1, background: si < 1 ? ACCENT : BORDER }} />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ─── TEMPLATES ─── */}
+          {tab === "templates" && (
+            <div style={{ display: "flex", gap: 20 }}>
+              {/* Template list */}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="btn-primary" style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13 }}>+ New Template</button>
+                </div>
+                {TEMPLATES.map((t, i) => (
+                  <div key={i} className="template-card card" onClick={() => setActiveTemplate(t)}
+                    style={{ background: CARD, border: `1px solid ${activeTemplate?.name === t.name ? ACCENT : BORDER}`, borderRadius: 12, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "border 0.2s" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                        <span className="tag badge-neutral" style={{ padding: "2px 10px", borderRadius: 10 }}>{t.type}</span>
+                        <span style={{ fontSize: 11, color: MUTED, fontFamily: "'JetBrains Mono', monospace" }}>{t.uses} uses</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 20, fontFamily: "'Syne', sans-serif", fontWeight: 800, color: ACCENT }}>{t.rate}</div>
+                      <div style={{ fontSize: 10, color: MUTED }}>reply rate</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* AI Compose Panel */}
+              <div style={{ width: 380, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                  <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: ACCENT }}>✦</span> AI Email Generator
+                  </div>
+                  {[["Recipient Name", "name", "Sarah Chen"], ["Their Role", "role", "Head of Talent"], ["Company", "company", "Blackrock"], ["Hook / Personalization", "hook", "your post on AI in compliance"]].map(([label, key, placeholder]) => (
+                    <div key={key} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, color: MUTED, marginBottom: 5, fontFamily: "'JetBrains Mono', monospace" }}>{label.toUpperCase()}</div>
+                      <input className="input-field" placeholder={placeholder} value={composeForm[key]} onChange={e => setComposeForm(p => ({ ...p, [key]: e.target.value }))}
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, fontSize: 13 }} />
+                    </div>
+                  ))}
+                  <button className="btn-primary" onClick={handleGenerate} disabled={generating}
+                    style={{ width: "100%", padding: "10px", borderRadius: 8, fontSize: 14, opacity: generating ? 0.7 : 1 }}>
+                    {generating ? "✦ Generating..." : "✦ Generate Email"}
+                  </button>
+                </div>
+
+                {(generatedEmail || !showAICompose) && (
+                  <div className="card" style={{ background: CARD, border: `1px solid ${ACCENT}33`, borderRadius: 12, padding: 20 }}>
+                    <div style={{ fontSize: 11, color: ACCENT, fontFamily: "'JetBrains Mono', monospace", marginBottom: 10 }}>GENERATED EMAIL</div>
+                    <pre style={{ fontSize: 12, color: TEXT, lineHeight: 1.7, whiteSpace: "pre-wrap", fontFamily: "'Inter', sans-serif", background: CARD2, borderRadius: 8, padding: 14 }}>
+                      {generatedEmail || AI_EMAIL_SAMPLE}
+                    </pre>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button className="btn-primary" style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12 }}>Send Now</button>
+                      <button className="btn-ghost" style={{ flex: 1, padding: "8px", borderRadius: 8, fontSize: 12 }}>Schedule</button>
+                      <button className="btn-ghost" style={{ padding: "8px 12px", borderRadius: 8, fontSize: 12 }}>Copy</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ─── INBOX ─── */}
+          {tab === "inbox" && (
+            <div style={{ display: "flex", gap: 20 }}>
+              <div style={{ flex: 1 }}>
+                {INBOX.map((m, i) => (
+                  <div key={i} className="lead-row card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 18px", marginBottom: 10, cursor: "pointer" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", background: m.type === "Positive" ? `rgba(0,229,199,0.15)` : CARD2, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>
+                          {m.type === "Positive" ? "✓" : m.type === "OOO" ? "→" : m.type === "Bounce" ? "✕" : "○"}
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                            <span style={{ fontWeight: 600, fontSize: 14 }}>{m.from}</span>
+                            <span style={{ fontSize: 11, color: MUTED }}>{m.company}</span>
+                            <span className={`tag ${m.type === "Positive" ? "badge-positive" : m.type === "Bounce" ? "badge-negative" : "badge-neutral"}`} style={{ padding: "2px 10px", borderRadius: 10 }}>{m.type}</span>
+                          </div>
+                          <div style={{ fontSize: 13, color: TEXT, marginTop: 4 }}>{m.subject}</div>
+                          <div style={{ fontSize: 12, color: MUTED, marginTop: 3 }}>{m.preview}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: MUTED, fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{m.time}</div>
+                    </div>
+                    {m.type === "Positive" && (
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}`, display: "flex", gap: 8 }}>
+                        <button className="btn-primary" style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12 }}>✦ AI Reply Suggestion</button>
+                        <button className="btn-ghost" style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12 }}>Schedule Meeting</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div style={{ width: 300 }}>
+                <div className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                  <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 14, marginBottom: 14 }}>Response Breakdown</div>
+                  {[["Positive Replies", 14, ACCENT], ["Neutral", 8, ACCENT2], ["Out of Office", 5, MUTED], ["Bounced", 3, "#FF5050"]].map(([l, v, c]) => (
+                    <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: c }} />
+                        <span style={{ fontSize: 13, color: MUTED }}>{l}</span>
+                      </div>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 14, fontWeight: 600, color: c }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ─── ANALYTICS ─── */}
+          {tab === "analytics" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                {[
+                  { label: "Best Send Time", value: "Tue 9–11am", icon: "◇" },
+                  { label: "Avg Response Time", value: "18 hours", icon: "◎" },
+                  { label: "Best Template", value: "Alumni Connect", icon: "◈" },
+                  { label: "A/B Winner", value: "Subject v2 +31%", icon: "⬡" },
+                ].map(m => (
+                  <div key={m.label} className="stat-card card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: "18px 22px", flex: 1, minWidth: 160 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                      <span style={{ fontSize: 10, color: MUTED, fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase" }}>{m.label}</span>
+                      <span style={{ color: ACCENT }}>{m.icon}</span>
+                    </div>
+                    <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 18 }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* A/B Test */}
+              <div className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 16 }}>A/B Test Results</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  {[
+                    { version: "Version A", subject: "Quick question about [Company] roles", opens: "34.2%", replies: "11.1%", winner: false },
+                    { version: "Version B", subject: "Your [Post/Activity] caught my eye", opens: "42.8%", replies: "18.3%", winner: true },
+                  ].map(v => (
+                    <div key={v.version} style={{ background: CARD2, borderRadius: 10, padding: 16, border: `1px solid ${v.winner ? ACCENT + "44" : BORDER}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                        <span style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }}>{v.version}</span>
+                        {v.winner && <span className="tag badge-positive" style={{ padding: "2px 10px", borderRadius: 10 }}>★ Winner</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, fontStyle: "italic" }}>"{v.subject}"</div>
+                      <div style={{ display: "flex", gap: 20 }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: MUTED, fontFamily: "'JetBrains Mono', monospace" }}>OPEN RATE</div>
+                          <div style={{ fontSize: 20, fontFamily: "'Syne', sans-serif", fontWeight: 800, color: v.winner ? ACCENT : TEXT }}>{v.opens}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: MUTED, fontFamily: "'JetBrains Mono', monospace" }}>REPLY RATE</div>
+                          <div style={{ fontSize: 20, fontFamily: "'Syne', sans-serif", fontWeight: 800, color: v.winner ? ACCENT : TEXT }}>{v.replies}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* AI Recommendations */}
+              <div className="card" style={{ background: CARD, border: `1px solid ${ACCENT}22`, borderRadius: 12, padding: 20 }}>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: ACCENT }}>✦</span> AI Performance Recommendations
+                </div>
+                {[
+                  "Your Tuesday 9–11am sends have 2.3× higher open rates — schedule more campaigns in this window.",
+                  "Alumni connection emails outperform cold outreach by 31% in your data. Prioritize alumni leads.",
+                  "Follow-up Day 3 is generating 44% of all your replies — ensure no leads skip this step.",
+                  "Subject lines referencing a specific post or activity have +61% open rate improvement.",
+                  "Finance sector leads reply 2.1× faster than consulting leads. Optimize timing accordingly.",
+                ].map((rec, i) => (
+                  <div key={i} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: i < 4 ? `1px solid ${BORDER}33` : "none" }}>
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: `rgba(0,229,199,0.12)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: ACCENT, flexShrink: 0, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{i + 1}</div>
+                    <div style={{ fontSize: 13, color: TEXT, lineHeight: 1.5 }}>{rec}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── SETTINGS ─── */}
+          {tab === "settings" && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {[
+                {
+                  title: "Email Account", fields: [
+                    ["Gmail Address", "alex.morgan@gmail.com"],
+                    ["Daily Send Limit", "40"],
+                    ["Warmup Status", "Active ●"],
+                    ["Delay Between Sends", "90–180 seconds"],
+                  ]
+                },
+                {
+                  title: "Your Profile", fields: [
+                    ["Full Name", "Alex Morgan"],
+                    ["Current Role", "Finance Graduate"],
+                    ["Target Industries", "Finance, Consulting, Audit"],
+                    ["LinkedIn URL", "linkedin.com/in/alexmorgan"],
+                  ]
+                },
+                {
+                  title: "API Integrations", fields: [
+                    ["Hunter.io API", "Connected ●"],
+                    ["Apollo.io API", "Not connected"],
+                    ["OpenAI / Claude", "Connected ●"],
+                    ["Google Sheets", "Connected ●"],
+                  ]
+                },
+                {
+                  title: "Follow-up Rules", fields: [
+                    ["First Follow-up", "Day 3"],
+                    ["Second Follow-up", "Day 7"],
+                    ["Final Follow-up", "Day 14"],
+                    ["Stop if Replied", "Enabled ●"],
+                  ]
+                },
+              ].map(section => (
+                <div key={section.title} className="card" style={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 20 }}>
+                  <div style={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, fontSize: 15, marginBottom: 16 }}>{section.title}</div>
+                  {section.fields.map(([label, value]) => (
+                    <div key={label} style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 10, color: MUTED, marginBottom: 5, fontFamily: "'JetBrains Mono', monospace" }}>{label.toUpperCase()}</div>
+                      <input className="input-field" defaultValue={value}
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, fontSize: 13, color: value.includes("●") ? ACCENT : TEXT }} />
+                    </div>
+                  ))}
+                  <button className="btn-primary" style={{ padding: "8px 18px", borderRadius: 8, fontSize: 13, marginTop: 4 }}>Save Changes</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
